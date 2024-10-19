@@ -1,6 +1,6 @@
 use actix_cors::Cors;
 use actix_multipart::Multipart;
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder, http};
+use actix_web::{get, http, post, web, App, HttpResponse, HttpServer, Responder};
 use futures_util::stream::StreamExt as _;
 use reqwest::Client;
 use serde::Deserialize;
@@ -62,14 +62,19 @@ async fn call_openai_api(
         .bearer_auth(api_key)
         .json(&request_body)
         .send()
-        .await?;
+        .await;
 
-    let json_response = response.json::<serde_json::Value>().await?;
-    let result = json_response["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("No response")
-        .to_string();
-    Ok(result)
+    match response {
+        Ok(successful_response) => {
+            let json_response = successful_response.json::<serde_json::Value>().await?;
+            let result = json_response["choices"][0]["message"]["content"]
+                .as_str()
+                .unwrap_or("No response")
+                .to_string();
+            Ok(result)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 // Save result to a file using the same UUID name asynchronously
@@ -113,18 +118,12 @@ async fn summarize(transcription: web::Json<TranscriptionRequest>) -> impl Respo
                         "content": summary
                     }))
                 }
-                Err(e) => {
-                    eprintln!("Error generating summary: {:?}", e);
-                    HttpResponse::InternalServerError()
-                        .json(json!({"error": "Error generating summary"}))
-                }
+                Err(_) => HttpResponse::InternalServerError()
+                    .json(json!({"error": "Error generating summary"})),
             }
         }
-        Err(e) => {
-            eprintln!("Error reading transcription: {:?}", e);
-            HttpResponse::InternalServerError()
-                .json(json!({"error": "Error reading transcription"}))
-        }
+        Err(_) => HttpResponse::InternalServerError()
+            .json(json!({"error": "Error reading transcription"})),
     }
 }
 
@@ -149,18 +148,12 @@ async fn key_points(transcription: web::Json<TranscriptionRequest>) -> impl Resp
                         "content": key_points
                     }))
                 }
-                Err(e) => {
-                    eprintln!("Error extracting key points: {:?}", e);
-                    HttpResponse::InternalServerError()
-                        .json(json!({"error": "Error extracting key points"}))
-                }
+                Err(_) => HttpResponse::InternalServerError()
+                    .json(json!({"error": "Error extracting key points"})),
             }
         }
-        Err(e) => {
-            eprintln!("Error reading transcription: {:?}", e);
-            HttpResponse::InternalServerError()
-                .json(json!({"error": "Error reading transcription"}))
-        }
+        Err(_) => HttpResponse::InternalServerError()
+            .json(json!({"error": "Error reading transcription"})),
     }
 }
 
@@ -186,18 +179,12 @@ async fn action_items(transcription: web::Json<TranscriptionRequest>) -> impl Re
                         "content": action_items
                     }))
                 }
-                Err(e) => {
-                    eprintln!("Error extracting action items: {:?}", e);
-                    HttpResponse::InternalServerError()
-                        .json(json!({"error": "Error extracting action items"}))
-                }
+                Err(_) => HttpResponse::InternalServerError()
+                    .json(json!({"error": "Error extracting action items"})),
             }
         }
-        Err(e) => {
-            eprintln!("Error reading transcription: {:?}", e);
-            HttpResponse::InternalServerError()
-                .json(json!({"error": "Error reading transcription"}))
-        }
+        Err(_) => HttpResponse::InternalServerError()
+            .json(json!({"error": "Error reading transcription"})),
     }
 }
 
@@ -223,21 +210,14 @@ async fn participants(transcription: web::Json<TranscriptionRequest>) -> impl Re
                         "content": participants
                     }))
                 }
-                Err(e) => {
-                    eprintln!("Error extracting participants: {:?}", e);
-                    HttpResponse::InternalServerError()
-                        .json(json!({"error": "Error extracting participants"}))
-                }
+                Err(_) => HttpResponse::InternalServerError()
+                    .json(json!({"error": "Error extracting participants"})),
             }
         }
-        Err(e) => {
-            eprintln!("Error reading transcription: {:?}", e);
-            HttpResponse::InternalServerError()
-                .json(json!({"error": "Error reading transcription"}))
-        }
+        Err(_) => HttpResponse::InternalServerError()
+            .json(json!({"error": "Error reading transcription"})),
     }
 }
-
 #[post("/upload")]
 async fn upload_audio(mut payload: Multipart) -> impl Responder {
     // Create a unique filename for the uploaded file
@@ -248,49 +228,27 @@ async fn upload_audio(mut payload: Multipart) -> impl Responder {
     let file_path_clone = file_path.clone();
 
     // Save the uploaded file
-    let file_creation = web::block(move || File::create(&file_path_clone)).await;
-    let mut file = match file_creation {
-        Ok(Ok(f)) => f,
-        Ok(Err(e)) | Err(e) => {
-            eprintln!("Failed to create file: {:?}", e);
-            return HttpResponse::InternalServerError().body("Failed to create file");
-        }
-    };
+    let mut file = web::block(move || File::create(&file_path_clone))
+        .await
+        .expect("Failed to create file for saving the uploaded audio")
+        .expect("Failed to open the file");
 
     // Process each field in the multipart payload
     while let Some(item) = payload.next().await {
-        let mut field = match item {
-            Ok(field) => field,
-            Err(e) => {
-                eprintln!("Failed to process multipart field: {:?}", e);
-                return HttpResponse::BadRequest().body("Invalid multipart data");
-            }
-        };
+        let mut field = item.expect("Failed to process multipart field");
 
         // Process the field stream
         while let Some(chunk) = field.next().await {
-            let data = match chunk {
-                Ok(data) => data,
-                Err(e) => {
-                    eprintln!("Failed to read chunk: {:?}", e);
-                    return HttpResponse::InternalServerError().body("Failed to read data chunk");
-                }
-            };
+            let data = chunk.expect("Failed to read chunk");
 
             // Write the chunk to the file
-            let write_result = web::block(move || {
+            file = web::block(move || {
                 file.write_all(&data)?;
                 Ok::<_, std::io::Error>(file)
             })
-            .await;
-
-            match write_result {
-                Ok(Ok(f)) => file = f,
-                Ok(Err(e)) | Err(e) => {
-                    eprintln!("Failed to write chunk to file: {:?}", e);
-                    return HttpResponse::InternalServerError().body("Failed to write to file");
-                }
-            }
+            .await
+            .expect("Failed to write chunk to file")
+            .expect("File writing failed");
         }
     }
 
@@ -303,11 +261,8 @@ async fn upload_audio(mut payload: Multipart) -> impl Responder {
                 "transcription_file": transcription_filename
             }))
         }
-        Err(e) => {
-            eprintln!("Error processing audio file: {:?}", e);
-            HttpResponse::InternalServerError()
-                .json(serde_json::json!({ "error": format!("Error: {}", e) }))
-        }
+        Err(e) => HttpResponse::InternalServerError()
+            .json(serde_json::json!({ "error": format!("Error: {}", e) })),
     }
 }
 
@@ -317,18 +272,16 @@ async fn download_file(path: web::Path<(String, String)>) -> impl Responder {
     let (category, file_name) = path.into_inner();
     let file_path = format!("./{}/{}", category, file_name);
 
-    match fs::read(&file_path).await {
-        Ok(content) => HttpResponse::Ok()
+    if let Ok(content) = fs::read(&file_path).await {
+        HttpResponse::Ok()
             .content_type("text/plain")
             .insert_header((
                 "Content-Disposition",
                 format!("attachment; filename={}", file_name),
             ))
-            .body(content),
-        Err(e) => {
-            eprintln!("File not found: {:?}", e);
-            HttpResponse::NotFound().body("File not found")
-        }
+            .body(content)
+    } else {
+        HttpResponse::NotFound().body("File not found")
     }
 }
 
@@ -354,7 +307,7 @@ async fn process_audio_file(
     // Process and transcribe the audio file using the existing logic
     let transcriptions = audio_processing::split_audio_by_size_and_transcribe(
         &file_path,
-        1024 * 1024 * 10, // Example max segment size (10MB)
+        1024 * 1024 * 10, // Example max segment size (5MB)
         &openai_api_key,
     )
     .await?;
