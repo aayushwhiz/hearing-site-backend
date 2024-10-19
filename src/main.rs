@@ -373,12 +373,12 @@ async fn main() -> std::io::Result<()> {
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
 
     // Ensure the necessary directories exist
-    fs::create_dir_all("./uploads").await?;
-    fs::create_dir_all("./transcriptions").await?;
-    fs::create_dir_all("./summaries").await?;
-    fs::create_dir_all("./key_points").await?;
-    fs::create_dir_all("./action_items").await?;
-    fs::create_dir_all("./participants").await?;
+    // fs::create_dir_all("./uploads").await?;
+    // fs::create_dir_all("./transcriptions").await?;
+    // fs::create_dir_all("./summaries").await?;
+    // fs::create_dir_all("./key_points").await?;
+    // fs::create_dir_all("./action_items").await?;
+    // fs::create_dir_all("./participants").await?;
 
     // Start the Actix Web server
     HttpServer::new(|| {
