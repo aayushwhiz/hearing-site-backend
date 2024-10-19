@@ -12,6 +12,7 @@ use std::path::Path;
 use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
+use dotenv::dotenv;
 
 mod audio_processing;
 
@@ -362,6 +363,7 @@ async fn process_audio_file(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenv().ok();
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
 
     // Ensure the necessary directories exist
@@ -378,13 +380,13 @@ async fn main() -> std::io::Result<()> {
             .wrap(
                 Cors::permissive(), // This will allow all origins, all methods, all headers
             )
-            .service(upload_audio)
-            .service(download_file)
+//            .service(upload_audio)
+//            .service(download_file)
             .service(health)
-            .service(summarize)
-            .service(key_points)
-            .service(action_items)
-            .service(participants)
+//            .service(summarize)
+//            .service(key_points)
+//            .service(action_items)
+//            .service(participants)
     })
     .bind(("0.0.0.0", port.parse().unwrap()))?
     .run()

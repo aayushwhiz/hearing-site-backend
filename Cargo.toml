@@ -21,6 +21,7 @@ futures = "0.3.31"
 futures-util = "0.3.31"
 uuid = { version = "1.11.0", features = ["v4"] }
 actix-cors = "0.7.0"
+dotenv = "0.15.0"
 
 [profile.release]
 panic = 'abort'
