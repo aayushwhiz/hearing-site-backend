@@ -1,1 +1,1 @@
-web: ./target/release/hearing-site
+web: ./target/release/backend
