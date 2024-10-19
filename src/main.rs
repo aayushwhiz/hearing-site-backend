@@ -1,7 +1,6 @@
 use actix_cors::Cors;
 use actix_multipart::Multipart;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
-use dotenv::dotenv;
 use futures_util::stream::StreamExt as _;
 use reqwest::Client;
 use serde::Deserialize;
@@ -297,7 +296,6 @@ async fn process_audio_file(
     println!("Starting transcription process for file: {}", file_path);
 
     // Load environment variables
-    dotenv().ok();
 
     // Get the OpenAI API key from the environment
     let openai_api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
@@ -363,7 +361,7 @@ async fn process_audio_file(
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenv().ok();
+    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
 
     // Ensure the necessary directories exist
     fs::create_dir_all("./uploads").await?;
@@ -387,7 +385,7 @@ async fn main() -> std::io::Result<()> {
             .service(action_items)
             .service(participants)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", port.parse().unwrap()))?
     .run()
     .await
 }
