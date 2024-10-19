@@ -287,6 +287,7 @@ async fn download_file(path: web::Path<(String, String)>) -> impl Responder {
 
 #[get("/health")]
 async fn health() -> impl Responder {
+    println!("Health check requested");
     HttpResponse::Ok().body("Server is running")
 }
 
