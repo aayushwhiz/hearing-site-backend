@@ -6,4 +6,6 @@
 /summaries
 /transcriptions
 /uploads
+.env
 .DS_Store
+Procfile
